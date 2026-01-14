@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Pipeline Monitoring Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📊 Data Pipeline Monitoring Dashboard</h1>
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Summary Cards -->
+        <section class="summary-section">
+            <div class="card">
+                <h3>Total Executions</h3>
+                <p class="metric-value" id="totalExecutions">-</p>
+            </div>
+            <div class="card">
+                <h3>Success Rate</h3>
+                <p class="metric-value" id="successRate">-</p>
+            </div>
+            <div class="card">
+                <h3>Avg Duration</h3>
+                <p class="metric-value" id="avgDuration">-</p>
+            </div>
+            <div class="card">
+                <h3>Active Pipelines</h3>
+                <p class="metric-value" id="pipelineCount">-</p>
+            </div>
+        </section>
+
+        <!-- Pipeline Status Table -->
+        <section class="pipelines-section">
+            <h2>Pipeline Status</h2>
+            <div class="table-container">
+                <table id="pipelinesTable">
+                    <thead>
+                        <tr>
+                            <th>Pipeline Name</th>
+                            <th>Status</th>
+                            <th>Last Execution</th>
+                            <th>Total Runs</th>
+                            <th>Success Rate</th>
+                            <th>Avg Duration</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pipelinesTableBody">
+                        <tr>
+                            <td colspan="7" class="loading">Loading pipelines...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="charts-section">
+            <div class="chart-container">
+                <h2>Execution Trends</h2>
+                <div id="executionTrendChart"></div>
+            </div>
+            <div class="chart-container">
+                <h2>System Metrics</h2>
+                <div id="systemMetricsChart"></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Pipeline Details Modal -->
+    <div id="pipelineModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalPipelineName">Pipeline Details</h2>
+            <div id="modalContent">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

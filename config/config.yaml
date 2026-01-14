@@ -1,0 +1,37 @@
+# Configuration file for Data Pipeline Monitoring Dashboard
+
+database:
+  type: sqlite
+  path: data/pipeline_metrics.db
+
+server:
+  host: 0.0.0.0
+  port: 5000
+  debug: false
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/monitoring.log
+
+monitoring:
+  # Metrics collection interval (in seconds)
+  collection_interval: 60
+  
+  # Retention period for metrics (in days)
+  retention_days: 30
+  
+  # Alert thresholds
+  alerts:
+    failure_rate_threshold: 0.1  # 10% failure rate triggers alert
+    execution_time_threshold: 3600  # 1 hour in seconds
+    data_quality_threshold: 0.95  # 95% data quality score
+
+pipelines:
+  # Example pipeline configurations
+  - name: etl_pipeline
+    description: "Main ETL pipeline"
+    enabled: true
+  - name: data_quality_check
+    description: "Data quality validation pipeline"
+    enabled: true
