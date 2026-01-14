@@ -39,7 +39,19 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 async function checkHealth() {
     try {
-        const response = await fetch(`${API_BASE}/health`);
+        const response = await fetch(`${API_BASE}/health`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            // Add timeout
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         const statusIndicator = document.getElementById('statusIndicator');
@@ -50,7 +62,7 @@ async function checkHealth() {
             statusText.textContent = 'Connected';
             statusDot.classList.remove('disconnected');
         } else {
-            statusText.textContent = 'Disconnected';
+            statusText.textContent = 'Unhealthy';
             statusDot.classList.add('disconnected');
         }
     } catch (error) {
@@ -59,7 +71,13 @@ async function checkHealth() {
         const statusText = document.getElementById('statusText');
         const statusDot = statusIndicator.querySelector('.status-dot');
         
-        statusText.textContent = 'Disconnected';
+        if (error.name === 'AbortError') {
+            statusText.textContent = 'Timeout';
+        } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            statusText.textContent = 'Server Offline';
+        } else {
+            statusText.textContent = 'Error';
+        }
         statusDot.classList.add('disconnected');
     }
 }
@@ -69,8 +87,24 @@ async function checkHealth() {
  */
 async function loadSummary() {
     try {
-        const response = await fetch(`${API_BASE}/metrics/summary?days=7`);
+        const response = await fetch(`${API_BASE}/metrics/summary?days=7`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.message || 'Unknown error occurred');
+        }
         
         const summary = data.summary;
         
@@ -82,6 +116,11 @@ async function loadSummary() {
         document.getElementById('pipelineCount').textContent = summary.pipeline_count || 0;
     } catch (error) {
         console.error('Error loading summary:', error);
+        // Show error in UI
+        document.getElementById('totalExecutions').textContent = 'Error';
+        document.getElementById('successRate').textContent = 'Error';
+        document.getElementById('avgDuration').textContent = 'Error';
+        document.getElementById('pipelineCount').textContent = 'Error';
     }
 }
 
@@ -90,43 +129,75 @@ async function loadSummary() {
  */
 async function loadPipelines() {
     try {
-        const response = await fetch(`${API_BASE}/pipelines?days=7`);
+        const response = await fetch(`${API_BASE}/pipelines?days=7`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.message || 'Unknown error occurred');
+        }
         
         const tbody = document.getElementById('pipelinesTableBody');
         tbody.innerHTML = '';
         
-        if (data.pipelines.length === 0) {
+        if (!data.pipelines || data.pipelines.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="loading">No pipelines found</td></tr>';
             return;
         }
         
         data.pipelines.forEach(pipeline => {
-            const row = document.createElement('tr');
-            
-            const statusClass = pipeline.latest_status === 'success' ? 'status-success' :
-                               pipeline.latest_status === 'failed' ? 'status-failed' : 'status-running';
-            
-            row.innerHTML = `
-                <td><strong>${pipeline.name}</strong></td>
-                <td><span class="status-badge ${statusClass}">${pipeline.latest_status}</span></td>
-                <td>${pipeline.latest_execution_time ? formatDate(pipeline.latest_execution_time) : 'N/A'}</td>
-                <td>${pipeline.total_runs}</td>
-                <td>${pipeline.success_rate.toFixed(1)}%</td>
-                <td>${pipeline.avg_duration_seconds ? formatDuration(pipeline.avg_duration_seconds) : 'N/A'}</td>
-                <td>
-                    <button class="btn btn-primary" onclick="showPipelineDetails('${pipeline.name}')">
-                        View Details
-                    </button>
-                </td>
-            `;
-            
-            tbody.appendChild(row);
+            try {
+                const row = document.createElement('tr');
+                
+                const statusClass = pipeline.latest_status === 'success' ? 'status-success' :
+                                   pipeline.latest_status === 'failed' ? 'status-failed' : 'status-running';
+                
+                // Escape HTML to prevent XSS
+                const pipelineName = escapeHtml(pipeline.name);
+                const status = escapeHtml(pipeline.latest_status);
+                
+                row.innerHTML = `
+                    <td><strong>${pipelineName}</strong></td>
+                    <td><span class="status-badge ${statusClass}">${status}</span></td>
+                    <td>${pipeline.latest_execution_time ? formatDate(pipeline.latest_execution_time) : 'N/A'}</td>
+                    <td>${pipeline.total_runs || 0}</td>
+                    <td>${pipeline.success_rate ? pipeline.success_rate.toFixed(1) : '0.0'}%</td>
+                    <td>${pipeline.avg_duration_seconds ? formatDuration(pipeline.avg_duration_seconds) : 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick="showPipelineDetails('${pipelineName.replace(/'/g, "\\'")}')">
+                            View Details
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            } catch (rowError) {
+                console.error('Error rendering pipeline row:', rowError);
+            }
         });
     } catch (error) {
         console.error('Error loading pipelines:', error);
         const tbody = document.getElementById('pipelinesTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">Error loading pipelines</td></tr>';
+        let errorMessage = 'Error loading pipelines';
+        
+        if (error.name === 'AbortError') {
+            errorMessage = 'Request timeout - please try again';
+        } else if (error.message) {
+            errorMessage = `Error: ${error.message}`;
+        }
+        
+        tbody.innerHTML = `<tr><td colspan="7" class="loading" style="color: #f44336;">${errorMessage}</td></tr>`;
     }
 }
 
@@ -233,33 +304,71 @@ async function showPipelineDetails(pipelineName) {
     const modalContent = document.getElementById('modalContent');
     const modalTitle = document.getElementById('modalPipelineName');
     
-    modalTitle.textContent = `${pipelineName} - Details`;
+    // Escape pipeline name for display
+    const safePipelineName = escapeHtml(pipelineName);
+    modalTitle.textContent = `${safePipelineName} - Details`;
     modalContent.innerHTML = '<p>Loading...</p>';
     modal.style.display = 'block';
     
     try {
-        const response = await fetch(`${API_BASE}/pipelines/${pipelineName}/executions?limit=10`);
+        // URL encode pipeline name to handle special characters
+        const encodedName = encodeURIComponent(pipelineName);
+        const response = await fetch(`${API_BASE}/pipelines/${encodedName}/executions?limit=10`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.message || 'Unknown error occurred');
+        }
+        
+        if (!data.executions || data.executions.length === 0) {
+            modalContent.innerHTML = '<p>No execution history found for this pipeline.</p>';
+            return;
+        }
         
         let html = '<h3>Recent Executions</h3><table style="width:100%"><thead><tr>';
         html += '<th>Status</th><th>Start Time</th><th>Duration</th><th>Records</th></tr></thead><tbody>';
         
         data.executions.forEach(exec => {
-            const statusClass = exec.status === 'success' ? 'status-success' :
-                               exec.status === 'failed' ? 'status-failed' : 'status-running';
-            html += `<tr>
-                <td><span class="status-badge ${statusClass}">${exec.status}</span></td>
-                <td>${formatDate(exec.start_time)}</td>
-                <td>${exec.duration_seconds ? formatDuration(exec.duration_seconds) : 'N/A'}</td>
-                <td>${exec.records_processed || 0}</td>
-            </tr>`;
+            try {
+                const statusClass = exec.status === 'success' ? 'status-success' :
+                                   exec.status === 'failed' ? 'status-failed' : 'status-running';
+                const status = escapeHtml(exec.status);
+                html += `<tr>
+                    <td><span class="status-badge ${statusClass}">${status}</span></td>
+                    <td>${exec.start_time ? formatDate(exec.start_time) : 'N/A'}</td>
+                    <td>${exec.duration_seconds ? formatDuration(exec.duration_seconds) : 'N/A'}</td>
+                    <td>${exec.records_processed || 0}</td>
+                </tr>`;
+            } catch (rowError) {
+                console.error('Error rendering execution row:', rowError);
+            }
         });
         
         html += '</tbody></table>';
         modalContent.innerHTML = html;
     } catch (error) {
         console.error('Error loading pipeline details:', error);
-        modalContent.innerHTML = '<p>Error loading pipeline details</p>';
+        let errorMessage = 'Error loading pipeline details';
+        
+        if (error.name === 'AbortError') {
+            errorMessage = 'Request timeout - please try again';
+        } else if (error.message) {
+            errorMessage = `Error: ${error.message}`;
+        }
+        
+        modalContent.innerHTML = `<p style="color: #f44336;">${escapeHtml(errorMessage)}</p>`;
     }
 }
 
@@ -298,6 +407,29 @@ function formatDuration(seconds) {
  * Format ISO date string to readable format
  */
 function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) {
+            return 'Invalid Date';
+        }
+        return date.toLocaleString();
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Invalid Date';
+    }
+}
+
+/**
+ * Escape HTML to prevent XSS attacks
+ */
+function escapeHtml(text) {
+    if (text == null) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
 }

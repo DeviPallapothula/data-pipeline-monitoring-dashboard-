@@ -3,11 +3,11 @@ flask==3.0.0
 flask-cors==4.0.0
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy>=2.0.36
 
-# Data Processing
-pandas==2.1.4
-numpy==1.26.2
+# Data Processing (optional - not required for core functionality)
+# pandas>=2.2.0  # Uncomment if needed for data processing
+# numpy>=1.26.0  # Uncomment if needed
 
 # Visualization
 plotly==5.18.0
